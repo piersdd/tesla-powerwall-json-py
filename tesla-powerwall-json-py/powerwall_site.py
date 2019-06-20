@@ -13,9 +13,7 @@ backup_reserve_percent = float("5.1")
 
 tpw = powerwall_site.main('192.168.5.6', 'ST17I0012345')
 
-
 """
-
 
 def main():
     gateway_host = 'powerwall.sb'
