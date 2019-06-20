@@ -1,3 +1,10 @@
+# macOS files
+._*
+.DS_Store
+
+# Visual Studio Code files
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
