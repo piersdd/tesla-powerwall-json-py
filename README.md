@@ -2,7 +2,7 @@
 Python module to access local Tesla Powerwall JSON API
 https://github.com/piersdd/tesla-powerwall-json-py
 
-NOTE: Tesla offer no official API to their Powerwall & Gateway; therefore, this library may well stop working at any time without warning.
+**NOTE**: Tesla offer no official API to their Powerwall & Gateway; therefore, this library may well stop working at any time without warning.
 
 Written by Piers Dawson-Damer
 
@@ -17,7 +17,8 @@ Principlly developed to interface with the excellent **Home Assistant** project 
 
 # Credits
 Many thanks to:
-Vince Loschiavo for documenting the API. (https://github.com/vloschiavo/powerwall2)
+Vince Loschiavo for documenting the API (https://github.com/vloschiavo/powerwall2)
+
 Božo Stojković for his JSON-Python object code (https://stackoverflow.com/users/4936137/božo-stojković)
 
 
