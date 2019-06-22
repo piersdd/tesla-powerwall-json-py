@@ -16,7 +16,7 @@ tpw = powerwall_site.main('192.168.5.6', 'ST17I0012345')
 """
 
 
-import json
+import json, time
 import requests
 from requests.exceptions import HTTPError, Timeout
 import urllib3
@@ -34,35 +34,48 @@ def main():
 
     logging.basicConfig(filename='powerwall_site.log', level=logging.WARNING)
 
-
     ## Instantiate powerwall_site object
     tpw = powerwall_site(gateway_host, password)
 
+    ## Query Sitemaster
+    _sitemaster = tpw.sitemaster()
+
+    if not _sitemaster['running']:
+        print("## Debug main() - SM not running")
+        # ## Validate token (incl. start sitemaster)
+        tpw.token = tpw.valid_token()
+        # redundant UNLESS token is valid AND sitemaster is stopped
+        # tpw.sitemaster_run()
+        time.sleep(7)
+
     ## Query battery state of charge (SoC)
-    stateofenergy = tpw.stateofenergy()
+    _stateofenergy = tpw.stateofenergy()
 
     ## Store battery SoC
-    tpw.battery_soc = stateofenergy['percentage']
+    tpw.battery_soc = _stateofenergy['percentage']
 
     ## Query meter aggregates
-    meters_aggregates = tpw.meters_aggregates()
+    _meters_aggregates = tpw.meters_aggregates()
 
     ## Store meter aggregates
     #  Currently populated by site (grid), battery, load, and solar
-    tpw.meters = meters(meters_aggregates)
+    tpw.meters = meters(_meters_aggregates)
 
 
 
-    # ## Validate token
-    # tpw.token = tpw.valid_token()
+    ## Validate token (Restarts Powerwall)
+    tpw.token = tpw.valid_token()
 
-    # ## Set Battery to Charge (Backup)
-    # real_mode = 'backup'
-    # tpw.set_operation(real_mode, backup_reserve_percent)
+    # ## Query Operation mode
+    # _operation = tpw.operation()
+
+    ## Set Battery to Charge (Backup)
+    real_mode = 'backup'
+    tpw.operation_set(real_mode, backup_reserve_percent)
     
     # ## Set Battery to Discharge (Self Consumption)
     # real_mode = 'self_consumption'
-    # tpw.set_operation(real_mode, backup_reserve_percent)
+    # tpw.operation_set(real_mode, backup_reserve_percent)
 
 
     ## Some output
@@ -79,7 +92,6 @@ def main():
     print("site.energy_imported:  " + str(tpw.meters.site.energy_imported))
     print("site.energy_exported:  " + str(tpw.meters.site.energy_exported))
     print("solar.energy_exported: " + str(tpw.meters.solar.energy_exported))
-
 
 
 class powerwall_site(object):
@@ -99,26 +111,24 @@ class powerwall_site(object):
 
     def __init__(self, gateway_host, password):
         """Return a new Powerwall_site object."""
-        self.token = 'ku8J3iPLKtTBOvOburYsXj-0GSCZhM6MrBgjCONZEPsZnkDT1d1D82F_hfbTdHqcjb_kzUC2FtyO5MggRtGU5A=='
-        # self.running = False
+        self.token = 'UJEOet2C41rezBp-ctR216fNQ4ftBaf3-nNls_wWAJk9wuiQVy6a0OnYw1UdfN1JW7rYKhubFCV_wTcV2t5WHw=='
+        self.running = False
         # self.uptime = 0
         # self.connected_to_tesla = False
         self.gateway_host = gateway_host
         self.password = password
         self.battery_soc = 0
         self.backup_reserve_percent = 13.14159265358979
+        self.real_mode = ''
 
         self.base_path = 'https://' + self.gateway_host
+        self.auth_header = {'Authorization': 'Bearer ' + self.token}
+                
+
 
     ### Returns current valid token or new valid token
     def valid_token(self):
-        auth_header = {'Authorization': 'Bearer ' + self.token}
         payload = json.dumps({ 'username' : 'installer', 'password' : self.password, "force_sm_off": True })
-
-        # ## Debug
-        # print("## Returns current valid token")
-        # print("auth_header: " + str(auth_header))
-        # print("payload: " + str(payload))
 
         endpoint = '/api/login/Basic'
         url = self.base_path + endpoint 
@@ -127,7 +137,7 @@ class powerwall_site(object):
         status_url = self.base_path + status_endpoint 
 
         ## Assess token validity [with /api/status]
-        result = requests.get(status_url, headers=auth_header, verify=False, timeout=2)
+        result = requests.get(status_url, headers=self.auth_header, verify=False, timeout=2)
 
         # Use the built-in JSON function to return parsed data
         dataobj = result.json()
@@ -147,8 +157,8 @@ class powerwall_site(object):
                 new_token = new_dataobj['token']
 
                 ## Restart Powerwall sitemaster.
-                auth_header = {'Authorization': 'Bearer ' + new_token}
-                self.sitemaster_run(auth_header)
+                self.auth_header = {'Authorization': 'Bearer ' + new_token}
+                self.sitemaster_run()
 
                 return new_token
         else:
@@ -157,18 +167,35 @@ class powerwall_site(object):
 
 
 
-    ## This starts the Powerwall(s) & Gateway (after getting an authentication token)
-    def sitemaster_run(self, auth_header):
+    ## Returns Sitemaster status
+    def sitemaster(self):
+        endpoint = '/api/sitemaster'
+        url = self.base_path + endpoint 
+
+        try:
+            result = requests.get(url, verify=False, timeout=5)
+            return result.json()
+
+        except requests.exceptions.RequestException:
+            print('HTTP Request failed')
+
+
+
+
+    ## Start the Powerwall(s) & Gateway (usually after getting an authentication token)
+    def sitemaster_run(self):
         endpoint = '/api/sitemaster/run'
         url = self.base_path + endpoint 
 
         try:
-            result = requests.get(url, headers=auth_header, verify=False, timeout=5)
+            result = requests.get(url, headers=self.auth_header, verify=False, timeout=5)
 
-            # print('Response HTTP Status Code: {status_code}'.format(
-            #     status_code=result.status_code))
-            # print('Response HTTP Response Body: {content}'.format(
-            #     content=result.content))
+            # print("## Debug sitemaster_run()")
+            # print("## result.status_code:" + str(result.status_code))
+            
+            if result.status_code == 202:
+                self.running = True
+
         except requests.exceptions.RequestException:
             print('HTTP Request failed')
 
@@ -180,17 +207,12 @@ class powerwall_site(object):
         url = self.base_path + endpoint 
         result = requests.get(url, verify=False, timeout=5)
 
-        # ## Debug - Use the built-in JSON function to return parsed data
-        # dataobj = result.json()
-        # print("## meters_aggregates JSON")
-        # print(print(json.dumps(dataobj,indent=4)))
-
         return result.json()
 
 
 
 
-    ## Reads charge state in percent of the Powerwall.
+    ## Read State of Charge (in percent)
     def stateofenergy(self):
 
         # When Sitemaster is not running, caught:
@@ -213,42 +235,61 @@ class powerwall_site(object):
         except Timeout as err:
             print("Request timed out: {0}".format(err))
 
+    ## Read Powerwall Operation Mode (real_mode)
+    def operation(self):
+        endpoint = '/api/operation'
+        url = self.base_path + endpoint
 
+        try:
+            result = requests.get(url, headers=self.auth_header, verify=False, timeout=5)
+
+            if result.status_code == 200:
+                self.real_mode = result.json()['real_mode']
+                print("## Debug valid_token()")
+                print("self.real_mode: " + self.real_mode)
+
+            return result.json()
+
+        except HTTPError as err:
+            print("Error: {0}".format(err))
+        except Timeout as err:
+            print("Request timed out: {0}".format(err))#
 
 
     ## Set Powerwall Operation to Charge (Backup) or Discharge (self_consumption)
     #  Pause PERHAPS WITH (self_consumption) w/ Current SoC as backup_reserve_percent
-    def set_operation(self, real_mode, backup_reserve_percent):
-        auth_header = {'Authorization': 'Bearer ' + self.token}
+    def operation_set(self, real_mode, backup_reserve_percent):
+        # auth_header = {'Authorization': 'Bearer ' + self.token}
         payload = json.dumps({"real_mode": real_mode, "backup_reserve_percent": backup_reserve_percent})
-
-        # # Debug
-        # print("## Set Powerwall Operation")
-        # print("auth_header: " + str(auth_header))
-        # print("payload: " + str(payload))
 
         set_endpoint = '/api/operation'
         set_url = self.base_path + set_endpoint
 
-        enable_operation_endpoint = '/api/config/completed'
-        enable_operation_url = self.base_path + enable_operation_endpoint 
+        enable_endpoint = '/api/config/completed'
+        enable_url = self.base_path + enable_endpoint 
 
         try:
-            result = requests.post(set_url, data=payload, headers=auth_header, verify=False, timeout=5)
+            result = requests.post(set_url, data=payload, headers=self.auth_header, verify=False, timeout=5)
 
-            print('Response HTTP Status Code: {status_code}'.format(
-                status_code=result.status_code))
-            print('Response HTTP Response Body: {content}'.format(
-                content=result.content))
+            if result.status_code == 200:
+                self.real_mode = result.json()['real_mode']
+
+                # print("## Debug valid_token()")
+                # print("self.real_mode: " + self.real_mode)
+
+            # print('Response HTTP Status Code: {status_code}'.format(
+            #     status_code=result.status_code))
+            # print('Response HTTP Response Body: {content}'.format(
+            #     content=result.content))
 
             # Enable Powerwall operation (after set operation)
             try:
-                result = requests.get(enable_operation_url, headers=auth_header, verify=False, timeout=5)
+                result = requests.get(enable_url, headers=self.auth_header, verify=False, timeout=5)
 
-                print('Response HTTP Status Code: {status_code}'.format(
-                    status_code=result.status_code))
-                print('Response HTTP Response Body: {content}'.format(
-                    content=result.content))
+                # print('Response HTTP Status Code: {status_code}'.format(
+                #     status_code=result.status_code))
+                # print('Response HTTP Response Body: {content}'.format(
+                #     content=result.content))
 
             except HTTPError as err:
                 print("Error: {0}".format(err))
