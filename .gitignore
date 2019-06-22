@@ -5,6 +5,9 @@
 # Visual Studio Code files
 .vscode/
 
+# log
+powerwall_site.log
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

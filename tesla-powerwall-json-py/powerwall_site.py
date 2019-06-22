@@ -15,10 +15,25 @@ tpw = powerwall_site.main('192.168.5.6', 'ST17I0012345')
 
 """
 
+
+import json
+import requests
+from requests.exceptions import HTTPError, Timeout
+import urllib3
+urllib3.disable_warnings() # For 'verify=False' SSL warning
+import logging
+
+_LOGGER = logging.getLogger(__name__)
+
+
+
 def main():
     gateway_host = 'powerwall.sb'
     password = 'ST17I0054321'
     backup_reserve_percent = float("5.1")
+
+    logging.basicConfig(filename='powerwall_site.log', level=logging.WARNING)
+
 
     ## Instantiate powerwall_site object
     tpw = powerwall_site(gateway_host, password)
@@ -35,6 +50,8 @@ def main():
     ## Store meter aggregates
     #  Currently populated by site (grid), battery, load, and solar
     tpw.meters = meters(meters_aggregates)
+
+
 
     # ## Validate token
     # tpw.token = tpw.valid_token()
@@ -64,13 +81,6 @@ def main():
     print("solar.energy_exported: " + str(tpw.meters.solar.energy_exported))
 
 
-
-import json
-import requests
-from requests.exceptions import HTTPError, Timeout
-
-import urllib3
-urllib3.disable_warnings() # For 'verify=False' SSL warning
 
 class powerwall_site(object):
     """Tesla Powerwall Sitemaster
