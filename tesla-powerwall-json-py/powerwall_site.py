@@ -149,7 +149,6 @@ class powerwall_site(object):
 
             ## Unable to retrieve new token (Unauthorised). Error with password perhaps
             if result.status_code == 401:
-                print("401 /api/login/Basic - Login Error (perhaps)???")
                 # Use the built-in JSON function to return parsed data
                 print(json.dumps(new_dataobj,indent=4))
             
