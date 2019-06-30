@@ -29,7 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 def main():
     gateway_host = 'powerwall.sb'
-    password = 'ST17I0054321'
+    password = 'ST17I054321'
     backup_reserve_percent = float("5.1")
 
     logging.basicConfig(filename='powerwall_site.log', level=logging.WARNING)
@@ -69,13 +69,16 @@ def main():
     # ## Query Operation mode
     # _operation = tpw.operation()
 
-    ## Set Battery to Charge (Backup)
-    real_mode = 'backup'
-    tpw.operation_set(real_mode, backup_reserve_percent)
+    # ## Set Battery to Charge (Backup)
+    # real_mode = 'backup'
+    # tpw.operation_set(real_mode, backup_reserve_percent)
     
     # ## Set Battery to Discharge (Self Consumption)
     # real_mode = 'self_consumption'
     # tpw.operation_set(real_mode, backup_reserve_percent)
+    
+    ## Pause Battery (Self Consumption)
+    tpw.operation_pause()
 
 
     ## Some output
@@ -253,6 +256,58 @@ class powerwall_site(object):
             print("Error: {0}".format(err))
         except Timeout as err:
             print("Request timed out: {0}".format(err))#
+
+
+
+
+    ## Pause Powerwall Operation
+    #   Discharge (self_consumption) w/ Current SoC as backup_reserve_percent
+    def operation_pause(self):
+
+        _backup_reserve_percent = self.battery_soc
+
+        _payload = json.dumps({"real_mode": "self_consumption", "backup_reserve_percent": _backup_reserve_percent})
+
+        _set_endpoint = '/api/operation'
+        _set_url = self.base_path + _set_endpoint
+
+        _enable_endpoint = '/api/config/completed'
+        _enable_url = self.base_path + _enable_endpoint 
+
+        try:
+            result = requests.post(_set_url, data=_payload, headers=self.auth_header, verify=False, timeout=5)
+
+            if result.status_code == 200:
+                self.real_mode = result.json()['real_mode']
+
+                # print("## Debug valid_token()")
+                # print("self.real_mode: " + self.real_mode)
+
+            # print('Response HTTP Status Code: {status_code}'.format(
+            #     status_code=result.status_code))
+            # print('Response HTTP Response Body: {content}'.format(
+            #     content=result.content))
+
+            # Enable Powerwall operation (after set operation)
+            try:
+                result = requests.get(_enable_url, headers=self.auth_header, verify=False, timeout=5)
+
+                # print('Response HTTP Status Code: {status_code}'.format(
+                #     status_code=result.status_code))
+                # print('Response HTTP Response Body: {content}'.format(
+                #     content=result.content))
+
+            except HTTPError as err:
+                print("Error: {0}".format(err))
+            except Timeout as err:
+                print("Request timed out: {0}".format(err))#
+
+        except HTTPError as err:
+            print("Error: {0}".format(err))
+        except Timeout as err:
+            print("Request timed out: {0}".format(err))#
+
+
 
 
     ## Set Powerwall Operation to Charge (Backup) or Discharge (self_consumption)
